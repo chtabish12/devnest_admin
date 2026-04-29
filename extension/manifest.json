@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "DevNest Activity",
+  "version": "0.1.0",
+  "description": "Tracks how you spend time across browser tabs while on the clock for DevNest. Activity is sent to your DevNest admin dashboard.",
+  "permissions": ["tabs", "idle", "storage", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "DevNest Activity"
+  },
+  "icons": {}
+}

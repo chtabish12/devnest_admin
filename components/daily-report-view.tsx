@@ -4,8 +4,11 @@ import { Briefcase, CalendarClock, Clock, Coffee, Megaphone } from "lucide-react
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { JobApplicationsTable } from "@/components/job-applications-table";
+import { ActivityCard } from "@/components/activity-card";
 import { eventsToSession, formatDuration } from "@/lib/time/aggregate";
+import { gmtWithZones, zonesBracketForDate } from "@/lib/time/zones";
 import { STANDUP_SLOTS, type StandupAttendance } from "@/lib/standups";
+import type { ActivityRollup } from "@/lib/data/activity-queries";
 import type { JobApplication, TimeEvent } from "@/lib/types/database";
 
 interface Props {
@@ -14,30 +17,68 @@ interface Props {
   events: TimeEvent[];
   jobs: JobApplication[];
   standups?: StandupAttendance[];
+  leave?: { id: string; reason: string | null } | null;
+  activity?: ActivityRollup;
+  activityInstalled?: boolean;
   // When true, the timer is "frozen" at the last event time (used for completed days
   // and admin views). When false (e.g. live today), totals extend to `now`.
   freeze?: boolean;
 }
 
-export function DailyReportView({ date, employeeName, events, jobs, standups, freeze }: Props) {
+export function DailyReportView({
+  date,
+  employeeName,
+  events,
+  jobs,
+  standups,
+  leave,
+  activity,
+  activityInstalled,
+  freeze,
+}: Props) {
   const referenceTime = freeze ? new Date(events[events.length - 1]?.occurred_at ?? date) : new Date();
   const session = eventsToSession(events, referenceTime);
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Daily report — {format(date, "EEEE, MMM d, yyyy")}</CardTitle>
-          <CardDescription>{employeeName}</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Daily report — {format(date, "EEEE, MMM d, yyyy")}</CardTitle>
+            <CardDescription>{employeeName}</CardDescription>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+            {leave ? (
+              <Badge variant="warning">
+                On leave{leave.reason ? ` — ${leave.reason}` : ""}
+              </Badge>
+            ) : null}
+            {!leave && session.isLate ? (
+              <Badge variant="destructive">Late by {session.lateMinutes}m</Badge>
+            ) : !leave && session.loginAt ? (
+              <Badge variant="success">On time</Badge>
+            ) : null}
+            {session.breakOverageMs > 0 ? (
+              <Badge variant="destructive">
+                Break over by {formatDuration(session.breakOverageMs)}
+              </Badge>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Work time" value={formatDuration(session.workMs)} icon={<Clock className="h-4 w-4" />} />
           <Stat label="Break time" value={formatDuration(session.breakMs)} icon={<Coffee className="h-4 w-4" />} />
           <Stat
             label="Started / Ended"
-            value={`${session.loginAt ? format(parseISO(session.loginAt), "p") : "—"} → ${
-              session.logoutAt ? format(parseISO(session.logoutAt), "p") : "—"
-            }`}
+            value={
+              session.loginAt
+                ? `${format(parseISO(session.loginAt), "HH:mm")} ${zonesBracketForDate(parseISO(session.loginAt))} → ${
+                    session.logoutAt ? format(parseISO(session.logoutAt), "HH:mm") : "—"
+                  }${
+                    session.logoutAt ? " " + zonesBracketForDate(parseISO(session.logoutAt)) : ""
+                  }`
+                : "—"
+            }
             icon={<CalendarClock className="h-4 w-4" />}
           />
           <Stat
@@ -71,9 +112,14 @@ export function DailyReportView({ date, employeeName, events, jobs, standups, fr
               return (
                 <li
                   key={slot.key}
-                  className="flex items-center justify-between rounded-md border p-2"
+                  className="flex items-center justify-between gap-2 rounded-md border p-2"
                 >
-                  <span className="text-sm font-medium">{slot.label}</span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{slot.label}</div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {gmtWithZones(slot.hourUTC, slot.minuteUTC)}
+                    </div>
+                  </div>
                   {att ? (
                     <Badge variant="success">Attended</Badge>
                   ) : (
@@ -85,6 +131,8 @@ export function DailyReportView({ date, employeeName, events, jobs, standups, fr
           </ul>
         </CardContent>
       </Card>
+
+      {activity ? <ActivityCard rollup={activity} installed={Boolean(activityInstalled)} /> : null}
 
       <Card>
         <CardHeader>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Check, Clock, Megaphone } from "lucide-react";
+import { Check, Clock, ExternalLink, Megaphone, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,21 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   STANDUP_SLOTS,
-  slotDateUTC,
   slotStatus,
   type StandupAttendance,
   type StandupSlot,
 } from "@/lib/standups";
+import { gmtWithZones } from "@/lib/time/zones";
 import { markStandupAttended } from "@/app/(employee)/dashboard/standup-actions";
+
+export interface StandupMeetingInfo {
+  slot: StandupSlot;
+  meetingUrl: string | null;
+}
 
 interface Props {
   attendances: StandupAttendance[];
+  meetings?: StandupMeetingInfo[];
   readOnly?: boolean;
 }
 
@@ -28,7 +34,8 @@ const STATUS_BADGE = {
   attended: { label: "Attended", variant: "success" as const },
 };
 
-export function StandupsCard({ attendances, readOnly }: Props) {
+export function StandupsCard({ attendances, meetings, readOnly }: Props) {
+  const meetingByKey = new Map((meetings ?? []).map((m) => [m.slot, m]));
   // Refresh status every minute so badges update across slot transitions.
   const [now, setNow] = useState<Date>(() => new Date());
   const [pending, startTransition] = useTransition();
@@ -59,8 +66,7 @@ export function StandupsCard({ attendances, readOnly }: Props) {
           Standups
         </CardTitle>
         <CardDescription>
-          Three standups daily — 9:30 AM, 12:00 PM, 4:00 PM <span className="font-medium">GMT</span>.
-          Times below show your local equivalent.
+          Three standups daily — start times below in GMT (PKT and UK in brackets).
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -68,11 +74,6 @@ export function StandupsCard({ attendances, readOnly }: Props) {
           {STANDUP_SLOTS.map((slot) => {
             const attendance = byKey.get(slot.key);
             const status = slotStatus(slot, attendance, now);
-            const localTime = slotDateUTC(slot, now).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-            const gmtLabel = `${String(slot.hourUTC).padStart(2, "0")}:${String(slot.minuteUTC).padStart(2, "0")} GMT`;
             const badge = STATUS_BADGE[status];
             return (
               <li
@@ -85,10 +86,22 @@ export function StandupsCard({ attendances, readOnly }: Props) {
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
-                  <span className="font-mono">{localTime}</span>
-                  <span>·</span>
-                  <span>{gmtLabel}</span>
+                  <span className="font-mono">
+                    {gmtWithZones(slot.hourUTC, slot.minuteUTC)}
+                  </span>
                 </div>
+                {meetingByKey.get(slot.key)?.meetingUrl ? (
+                  <a
+                    href={meetingByKey.get(slot.key)!.meetingUrl!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent"
+                  >
+                    <Video className="h-3.5 w-3.5" />
+                    Join meeting
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : null}
                 {!readOnly && status !== "attended" ? (
                   <Button
                     size="sm"
@@ -102,7 +115,7 @@ export function StandupsCard({ attendances, readOnly }: Props) {
                 ) : null}
                 {status === "attended" && attendance ? (
                   <p className="text-xs text-muted-foreground">
-                    Joined at {new Date(attendance.attended_at).toLocaleTimeString()}
+                    Joined at {new Date(attendance.attended_at).toISOString().slice(11, 16)} GMT
                   </p>
                 ) : null}
               </li>

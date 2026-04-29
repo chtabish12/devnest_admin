@@ -4,6 +4,7 @@ import { Briefcase, ClipboardList, Home } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -39,8 +40,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
               />
             </nav>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="hidden text-sm text-muted-foreground sm:inline">{profile.full_name}</span>
+            <ThemeToggle />
             <SignOutButton />
           </div>
         </div>

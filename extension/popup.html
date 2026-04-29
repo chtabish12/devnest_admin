@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DevNest Activity</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <strong>DevNest Activity</strong>
+      <span id="status-pill" class="pill pill-muted">…</span>
+    </header>
+
+    <section id="signed-out" class="hidden">
+      <p class="muted">Sign in with the email and password your DevNest admin gave you.</p>
+      <form id="sign-in-form">
+        <label>
+          Email
+          <input type="email" id="email" autocomplete="email" required />
+        </label>
+        <label>
+          Password
+          <input type="password" id="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit" id="sign-in-btn">Sign in</button>
+        <p id="sign-in-error" class="error hidden"></p>
+      </form>
+      <p class="muted small">
+        While signed in, this extension records the host (e.g. <code>linkedin.com</code>) and
+        time spent on each tab. Idle periods are excluded. Data goes only to your DevNest
+        admin dashboard.
+      </p>
+    </section>
+
+    <section id="signed-in" class="hidden">
+      <div class="row">
+        <div>
+          <div class="muted small">Signed in as</div>
+          <div id="signed-in-name">—</div>
+        </div>
+        <button id="sign-out-btn" class="link">Sign out</button>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <span class="muted small">Currently tracking</span>
+          <span id="tracking-state" class="pill pill-muted">…</span>
+        </div>
+        <div id="current-host" class="mono">—</div>
+        <div id="queue-info" class="muted small">—</div>
+      </div>
+
+      <div class="row">
+        <button id="pause-btn">Pause tracking</button>
+        <button id="flush-btn" class="secondary">Sync now</button>
+      </div>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

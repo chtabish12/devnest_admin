@@ -2,6 +2,14 @@ import type { EventType, TimeEvent } from "@/lib/types/database";
 
 export type WorkStatus = "not_started" | "working" | "on_break" | "done";
 
+// Work day expectations (UTC).
+export const WORK_START_HOUR_UTC = 9; // 09:00 GMT
+export const WORK_END_HOUR_UTC = 18; // 18:00 GMT
+// Internal grace window. Logins within this many minutes of 09:00 are not flagged.
+// Intentionally not surfaced in user-facing copy.
+const LATE_GRACE_MINUTES = 5;
+export const MAX_DAILY_BREAK_MS = 60 * 60 * 1000; // 1 hour total break per day
+
 export interface SessionSummary {
   status: WorkStatus;
   workMs: number;
@@ -11,6 +19,13 @@ export interface SessionSummary {
   breakCount: number;
   lastEventAt: string | null;
   lastEventType: EventType | null;
+  // Total minutes after 09:00 GMT the day's first `login` event happened.
+  // 0 if on time/early, null if no login yet.
+  lateMinutes: number | null;
+  // Whether to flag this login as late (true once lateMinutes exceeds the grace window).
+  isLate: boolean;
+  // Break ms used beyond MAX_DAILY_BREAK_MS. 0 if within the 1-hour limit.
+  breakOverageMs: number;
 }
 
 const ZERO: SessionSummary = {
@@ -22,6 +37,9 @@ const ZERO: SessionSummary = {
   breakCount: 0,
   lastEventAt: null,
   lastEventType: null,
+  lateMinutes: null,
+  isLate: false,
+  breakOverageMs: 0,
 };
 
 // Walks the day's events (ordered ascending) and produces totals + current status.
@@ -89,6 +107,29 @@ export function eventsToSession(events: TimeEvent[], now: Date = new Date()): Se
         ? "on_break"
         : "working";
 
+  // Compute late minutes vs 09:00 GMT on the day of the login.
+  let lateMinutes: number | null = null;
+  let isLate = false;
+  if (loginAt) {
+    const loginDate = new Date(loginAt);
+    const startOfWorkDay = new Date(
+      Date.UTC(
+        loginDate.getUTCFullYear(),
+        loginDate.getUTCMonth(),
+        loginDate.getUTCDate(),
+        WORK_START_HOUR_UTC,
+        0,
+        0,
+        0,
+      ),
+    );
+    const diffMin = (loginDate.getTime() - startOfWorkDay.getTime()) / 60_000;
+    lateMinutes = Math.max(0, Math.round(diffMin));
+    isLate = diffMin > LATE_GRACE_MINUTES;
+  }
+
+  const breakOverageMs = Math.max(0, breakMs - MAX_DAILY_BREAK_MS);
+
   return {
     status,
     workMs,
@@ -98,6 +139,9 @@ export function eventsToSession(events: TimeEvent[], now: Date = new Date()): Se
     breakCount,
     lastEventAt: last.occurred_at,
     lastEventType: last.event_type,
+    lateMinutes,
+    isLate,
+    breakOverageMs,
   };
 }
 

@@ -8,6 +8,7 @@ import { JobApplicationsTable } from "@/components/job-applications-table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { dayBounds } from "@/lib/time/aggregate";
+import { getActivitySessions, rollupActivity } from "@/lib/data/activity-queries";
 import type { StandupAttendance } from "@/lib/standups";
 import type { JobApplication, Profile, TimeEvent } from "@/lib/types/database";
 
@@ -34,7 +35,7 @@ export default async function EmployeeDetailPage({
   const { start, end } = dayBounds(target);
   const isoDay = target.toISOString().slice(0, 10);
 
-  const [eventsRes, jobsRes, allJobsRes, standupsRes] = await Promise.all([
+  const [eventsRes, jobsRes, allJobsRes, standupsRes, leaveRes] = await Promise.all([
     supabase
       .from("time_events")
       .select("*")
@@ -59,13 +60,24 @@ export default async function EmployeeDetailPage({
       .select("*")
       .eq("employee_id", profile.id)
       .eq("standup_date", isoDay),
+    supabase
+      .from("leaves")
+      .select("id, reason")
+      .eq("employee_id", profile.id)
+      .eq("leave_date", isoDay)
+      .maybeSingle(),
   ]);
 
   const events = (eventsRes.data as TimeEvent[]) ?? [];
   const dayJobs = (jobsRes.data as JobApplication[]) ?? [];
   const recentJobs = (allJobsRes.data as JobApplication[]) ?? [];
   const standups = (standupsRes.data as StandupAttendance[]) ?? [];
+  const leave = (leaveRes.data as { id: string; reason: string | null } | null) ?? null;
   const dayDone = events[events.length - 1]?.event_type === "logout";
+
+  const activitySessions = await getActivitySessions(profile.id, start, end);
+  const activityRollup = rollupActivity(activitySessions);
+  const activityInstalled = activitySessions.length > 0;
 
   return (
     <div className="space-y-6">
@@ -114,6 +126,9 @@ export default async function EmployeeDetailPage({
         events={events}
         jobs={dayJobs}
         standups={standups}
+        leave={leave}
+        activity={activityRollup}
+        activityInstalled={activityInstalled}
         freeze={dayDone}
       />
 
