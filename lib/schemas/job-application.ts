@@ -20,62 +20,70 @@ export const JOB_STATUS_LABELS: Record<(typeof JOB_STATUSES)[number], string> = 
   no_response: "No Response",
 };
 
-// --- Per-field helpers ---
+// --- Helpers ---
+//
+// Each helper preprocesses the raw input (which may be `string`, `""`, `null`,
+// or `undefined`) into a normalized `string | null` BEFORE the validation runs.
+// This is important because the form posts strings, but the server action
+// re-validates the values that have already been transformed once on the
+// client (so the server sees `null` for empty fields). Without preprocess
+// the second pass would error with "expected string, received null".
 
-const optionalString = z
-  .string()
-  .trim()
-  .optional()
-  .transform((v) => (v && v.length > 0 ? v : null));
+const toNullableTrimmed = (v: unknown): string | null => {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== "string") return null;
+  const trimmed = v.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const optionalString = z.preprocess(toNullableTrimmed, z.string().nullable());
+
+const optionalDate = z.preprocess(toNullableTrimmed, z.string().nullable());
+
+const optionalTime = z.preprocess(toNullableTrimmed, z.string().nullable());
 
 // Auto-prepends https:// when the user types a host without a scheme
 // (e.g. `linkedin.com/jobs/123` becomes `https://linkedin.com/jobs/123`).
-// Empty values pass through as null.
-const optionalUrl = z
-  .string()
-  .trim()
-  .optional()
-  .transform((v) => {
-    if (!v || v.length === 0) return null;
-    return /^https?:\/\//i.test(v) ? v : `https://${v}`;
-  })
-  .refine(
-    (v) => {
-      if (v === null) return true;
-      try {
-        const parsed = new URL(v);
-        return Boolean(parsed.hostname && parsed.hostname.includes("."));
-      } catch {
-        return false;
-      }
-    },
-    { message: "Doesn't look like a valid web address" },
-  );
+const optionalUrl = z.preprocess(
+  (v) => {
+    const trimmed = toNullableTrimmed(v);
+    if (trimmed === null) return null;
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  },
+  z
+    .string()
+    .nullable()
+    .refine(
+      (v) => {
+        if (v === null) return true;
+        try {
+          const parsed = new URL(v);
+          return Boolean(parsed.hostname && parsed.hostname.includes("."));
+        } catch {
+          return false;
+        }
+      },
+      { message: "Doesn't look like a valid web address" },
+    ),
+);
 
-const optionalDate = z
-  .string()
-  .optional()
-  .transform((v) => (v && v.length > 0 ? v : null));
-
-const optionalTime = z
-  .string()
-  .optional()
-  .transform((v) => (v && v.length > 0 ? v : null));
-
-const optionalEmail = z
-  .string()
-  .trim()
-  .optional()
-  .transform((v) => (v && v.length > 0 ? v : null))
-  .refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
-    message: "Doesn't look like a valid email",
-  });
+const optionalEmail = z.preprocess(
+  toNullableTrimmed,
+  z
+    .string()
+    .nullable()
+    .refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+      message: "Doesn't look like a valid email",
+    }),
+);
 
 const requiredText = (label: string) =>
-  z
-    .string({ required_error: `${label} is required` })
-    .trim()
-    .min(1, `${label} is required`);
+  z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z
+      .string({ required_error: `${label} is required` })
+      .min(1, `${label} is required`),
+  );
 
 // --- Schema ---
 // Required: applied_date, company, job_title, status. Everything else optional.
